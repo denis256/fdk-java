@@ -4,8 +4,8 @@ package com.fnproject.fn.runtime;
 import com.fnproject.fn.api.Headers;
 import com.fnproject.fn.api.InputEvent;
 import com.fnproject.fn.api.OutputEvent;
-import com.fnproject.fn.runtime.exception.FunctionInputHandlingException;
-import com.fnproject.fn.runtime.exception.FunctionOutputHandlingException;
+import com.fnproject.fn.api.exception.FunctionInputHandlingException;
+import com.fnproject.fn.api.exception.FunctionOutputHandlingException;
 import org.apache.http.Header;
 import org.apache.http.HttpException;
 import org.apache.http.HttpRequest;
@@ -25,7 +25,6 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.function.Function;
 
-import static com.fnproject.fn.runtime.flow.RemoteCompleterApiClient.CONTENT_TYPE_HEADER;
 
 /**
  * Reads input via an InputStream as an HTTP request.
@@ -34,12 +33,16 @@ import static com.fnproject.fn.runtime.flow.RemoteCompleterApiClient.CONTENT_TYP
  */
 public class HttpEventCodec implements EventCodec {
 
+    private static final String CONTENT_TYPE_HEADER = "Content-Type";
     private final SessionInputBuffer sib;
     private final SessionOutputBuffer sob;
     private final HttpMessageParser<HttpRequest> parser;
 
+    private final Map<String, String> env;
 
-    HttpEventCodec(InputStream input, OutputStream output) {
+    HttpEventCodec(Map<String, String> env, InputStream input, OutputStream output) {
+
+        this.env = env;
 
         SessionInputBufferImpl sib = new SessionInputBufferImpl(new HttpTransportMetricsImpl(), 65535);
         sib.bind(Objects.requireNonNull(input));
@@ -54,6 +57,14 @@ public class HttpEventCodec implements EventCodec {
 
     private static String requiredHeader(HttpRequest req, String id) {
         return Optional.ofNullable(req.getFirstHeader(id)).map(Header::getValue).orElseThrow(() -> new FunctionInputHandlingException("Incoming HTTP frame is missing required header: " + id));
+    }
+
+    private String getRequiredEnv(String name) {
+        String val = env.get(name);
+        if (val == null) {
+            throw new FunctionInputHandlingException("Required environment variable " + name + " is not set - are you running a function outside of fn run?");
+        }
+        return val;
     }
 
     @Override
@@ -74,13 +85,13 @@ public class HttpEventCodec implements EventCodec {
             long contentLength = Long.parseLong(requiredHeader(req, "content-length"));
             bodyStream = new ContentLengthInputStream(sib, contentLength);
         } else if (req.getHeaders("transfer-encoding").length > 0 &&
-                req.getFirstHeader("transfer-encoding").getValue().equalsIgnoreCase("chunked")) {
+           req.getFirstHeader("transfer-encoding").getValue().equalsIgnoreCase("chunked")) {
             bodyStream = new ChunkedInputStream(sib);
         } else {
             bodyStream = new ByteArrayInputStream(new byte[]{});
         }
-        String appName = requiredHeader(req, "fn_app_name");
-        String route = requiredHeader(req, "fn_path");
+        String appName = getRequiredEnv("FN_APP_NAME");
+        String route = getRequiredEnv("FN_PATH");
         String method = requiredHeader(req, "fn_method");
         String requestUrl = requiredHeader(req, "fn_request_url");
 
@@ -90,11 +101,10 @@ public class HttpEventCodec implements EventCodec {
         }
 
         return Optional.of(new ReadOnceInputEvent(appName, route, requestUrl, method,
-                bodyStream, Headers.fromMap(headers),
-                QueryParametersParser.getParams(requestUrl)));
+           bodyStream, Headers.fromMap(headers),
+           QueryParametersParser.getParams(requestUrl)));
 
     }
-
 
     @Override
     public boolean shouldContinue() {

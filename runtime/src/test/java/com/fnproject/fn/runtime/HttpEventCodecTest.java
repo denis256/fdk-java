@@ -3,7 +3,7 @@ package com.fnproject.fn.runtime;
 import com.fnproject.fn.api.Headers;
 import com.fnproject.fn.api.InputEvent;
 import com.fnproject.fn.api.OutputEvent;
-import com.fnproject.fn.runtime.exception.FunctionInputHandlingException;
+import com.fnproject.fn.api.exception.FunctionInputHandlingException;
 import org.apache.commons.io.input.NullInputStream;
 import org.apache.commons.io.output.NullOutputStream;
 import org.junit.Test;
@@ -12,7 +12,6 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -45,20 +44,24 @@ public class HttpEventCodecTest {
             "Accept-Encoding: gzip\n" +
             "User-Agent: useragent\n" +
             "Fn_Request_url: http//localhost:8080/r/testapp/test\n" +
-            "Fn_Path: /test2\n" +
             "Fn_Method: GET\n" +
             "Content-Length: 0\n" +
-            "Fn_App_name: testapp\n" +
             "Fn_Call_Id: task-id2\n" +
             "Myconfig: fooconfig\n\n";
 
     private final Map<String, String> emptyConfig = new HashMap<>();
+    private final Map<String, String> env() {
+        HashMap<String, String> env = new HashMap<>();
+        env.put("FN_APP_NAME", "testapp");
+        env.put("FN_PATH", "/test");
+        return env;
+    }
 
     @Test
     public void testParsingSimpleHttpRequestWithFnHeadersAndBody() {
         ByteArrayInputStream bis = new ByteArrayInputStream(postReq.getBytes());
         ByteArrayOutputStream bos = new ByteArrayOutputStream();
-        HttpEventCodec httpEventCodec = new HttpEventCodec(bis, bos);
+        HttpEventCodec httpEventCodec = new HttpEventCodec(env(), bis, bos);
 
         InputEvent event = httpEventCodec.readEvent().get();
         isExpectedPostEvent(event);
@@ -78,7 +81,7 @@ public class HttpEventCodecTest {
 
         ByteArrayInputStream bis = new ByteArrayInputStream(input);
         ByteArrayOutputStream bos = new ByteArrayOutputStream();
-        HttpEventCodec httpEventCodec = new HttpEventCodec(bis, bos);
+        HttpEventCodec httpEventCodec = new HttpEventCodec(env(), bis, bos);
 
         InputEvent postEvent = httpEventCodec.readEvent().get();
         isExpectedPostEvent(postEvent);
@@ -95,7 +98,7 @@ public class HttpEventCodecTest {
     @Test
     public void shouldRejectInvalidHttpRequest() {
         try {
-            HttpEventCodec httpEventCodec = new HttpEventCodec(asStream("NOT_HTTP " + getReq), nullOut);
+            HttpEventCodec httpEventCodec = new HttpEventCodec(env(), asStream("NOT_HTTP " + getReq), nullOut);
 
             httpEventCodec.readEvent();
             fail();
@@ -107,12 +110,10 @@ public class HttpEventCodecTest {
 
     @Test
     public void shouldRejectMissingHttpHeaders() {
-        Map<String, String> requiredHeaders = new HashMap<>();
 
+        Map<String, String> requiredHeaders = new HashMap<>();
         requiredHeaders.put("fn_request_url", "request_url");
-        requiredHeaders.put("fn_path", "/route");
         requiredHeaders.put("fn_method", "GET");
-        requiredHeaders.put("fn_app_name", "app_name");
 
         for (String key : requiredHeaders.keySet()) {
             Map<String, String> newMap = new HashMap<>(requiredHeaders);
@@ -120,21 +121,42 @@ public class HttpEventCodecTest {
             String req = "GET / HTTP/1.1\n" + newMap.entrySet().stream().map(e -> e.getKey() + ": " + e.getValue()).collect(Collectors.joining("\n")) + "\n\n";
 
             try {
-                HttpEventCodec httpEventCodec = new HttpEventCodec(asStream(req), nullOut);
+                HttpEventCodec httpEventCodec = new HttpEventCodec(env(), asStream(req), nullOut);
                 httpEventCodec.readEvent();
                 fail("Should fail with header missing:" + key);
             } catch (FunctionInputHandlingException e) {
                 assertThat(e).hasMessageMatching("Incoming HTTP frame is missing required header: " + key);
             }
         }
+    }
 
+    @Test
+    public void shouldRejectMissingEnv() {
+        Map<String, String> requiredEnv = new HashMap<>();
+
+        requiredEnv.put("FN_PATH", "/route");
+        requiredEnv.put("FN_APP_NAME", "app_name");
+
+        for (String key : requiredEnv.keySet()) {
+            Map<String, String> newMap = new HashMap<>(requiredEnv);
+            newMap.remove(key);
+
+            try {
+                ByteArrayInputStream bis = new ByteArrayInputStream(postReq.getBytes());
+                HttpEventCodec httpEventCodec = new HttpEventCodec(newMap, bis, nullOut);
+                httpEventCodec.readEvent();
+                fail("Should fail with header missing:" + key);
+            } catch (FunctionInputHandlingException e) {
+                assertThat(e).hasMessageMatching("Required environment variable " + key + " is not set - are you running a function outside of fn run\\?");
+            }
+        }
     }
 
     @Test
     public void shouldSerializeSimpleSuccessfulEvent() throws Exception{
         ByteArrayOutputStream bos = new ByteArrayOutputStream();
 
-        HttpEventCodec httpEventCodec = new HttpEventCodec(nullIn,bos);
+        HttpEventCodec httpEventCodec = new HttpEventCodec(env(), nullIn, bos);
         OutputEvent outEvent = OutputEvent.fromBytes("Hello".getBytes(),OutputEvent.SUCCESS,"text/plain");
 
         httpEventCodec.writeEvent(outEvent);
@@ -173,7 +195,7 @@ public class HttpEventCodecTest {
     public void shouldSerializeSuccessfulEventWithHeaders() throws Exception{
         ByteArrayOutputStream bos = new ByteArrayOutputStream();
 
-        HttpEventCodec httpEventCodec = new HttpEventCodec(nullIn,bos);
+        HttpEventCodec httpEventCodec = new HttpEventCodec(env(), nullIn, bos);
         Map<String, String> hs = new HashMap<>();
         hs.put("foo", "bar");
         hs.put("Content-Type", "application/octet-stream"); // ignored
@@ -195,7 +217,7 @@ public class HttpEventCodecTest {
     public void shouldSerializeSimpleFailedEvent() throws Exception{
         ByteArrayOutputStream bos = new ByteArrayOutputStream();
 
-        HttpEventCodec httpEventCodec = new HttpEventCodec(nullIn,bos);
+        HttpEventCodec httpEventCodec = new HttpEventCodec(env(), nullIn, bos);
         OutputEvent outEvent = OutputEvent.fromBytes("Hello".getBytes(), OutputEvent.FAILURE,"text/plain");
 
         httpEventCodec.writeEvent(outEvent);
@@ -212,7 +234,7 @@ public class HttpEventCodecTest {
     public void shouldSerializeFailedEventWithHeaders() throws Exception{
         ByteArrayOutputStream bos = new ByteArrayOutputStream();
 
-        HttpEventCodec httpEventCodec = new HttpEventCodec(nullIn,bos);
+        HttpEventCodec httpEventCodec = new HttpEventCodec(env(), nullIn,bos);
         Map<String, String> hs = new HashMap<>();
         hs.put("foo", "bar");
         hs.put("Content-Type", "application/octet-stream"); // ignored
@@ -237,7 +259,7 @@ public class HttpEventCodecTest {
     private void isExpectedGetEvent(InputEvent getEvent) {
         assertThat(getEvent.getAppName()).isEqualTo("testapp");
         assertThat(getEvent.getMethod()).isEqualTo("GET");
-        assertThat(getEvent.getRoute()).isEqualTo("/test2");
+        assertThat(getEvent.getRoute()).isEqualTo("/test");
 
         assertThat(getEvent.getHeaders().getAll())
                 .contains(headerEntry("Accept-Encoding", "gzip"),
