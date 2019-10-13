@@ -60,7 +60,7 @@ $ fn start
 Similarly, start the Flows server server and point it at the functions server API URL:
 
 ```
-$ DOCKER_LOCALHOST=$(docker inspect --type container -f '{{.NetworkSettings.Gateway}}' functions)
+$ DOCKER_LOCALHOST=$(docker inspect --type container -f '{{.NetworkSettings.Gateway}}' fnserver)
 
 $ docker run --rm  \
        -p 8081:8081 \
@@ -99,6 +99,19 @@ func.yaml created
 
 ```
 
+### Add the Flow runtime to your function 
+
+In your `pom.xml` add a depdendency on `flow-runtime` : 
+
+```$ml
+        <dependency>
+            <groupId>com.fnproject.fn</groupId>
+            <artifactId>flow-runtime</artifactId>
+            <version>${fdk.version}</version>
+        </dependency>
+
+``` 
+
 ### Create a Flow within your Function
 
 You will create a function that produces the nth prime number and then returns
@@ -117,7 +130,10 @@ package com.example.fn;
 
 import com.fnproject.fn.api.flow.Flow;
 import com.fnproject.fn.api.flow.Flows;
+import com.fnproject.fn.runtime.flow.FlowFeature;
+import com.fnproject.fn.api.FnFeature;
 
+@FnFeature(FlowFeature.class)
 public class PrimeFunction {
 
     public String handleRequest(int nth) {
@@ -166,7 +182,7 @@ path: /primes
 Create your app and deploy your function:
 
 ```
-$ fn apps create flows-example
+$ fn create app flows-example
 Successfully created app: flows-example
 
 $ fn deploy --app flows-example
@@ -178,20 +194,27 @@ Configure your function to talk to the local flow service endpoint:
 ```
 $ DOCKER_LOCALHOST=$(docker inspect --type container -f '{{.NetworkSettings.Gateway}}' functions)
 
-$ fn apps config set flows-example COMPLETER_BASE_URL "http://$DOCKER_LOCALHOST:8081"
+$ fn config app flows-example COMPLETER_BASE_URL "http://$DOCKER_LOCALHOST:8081"
 ```
 
 ### Run your Flow function
 
-You can now run your function using `fn call` or HTTP and curl:
+You can now run your function using `fn invoke` or HTTP.
 
 ```
-$ echo 10 | fn call flows-example /primes
+$ echo 10 | fn invoke flows-example primes
 The 10th prime number is 29
 ```
 
+To invoke your function via HTTP, you need to know its invocation endpoint (or the function needs to have an HTTP trigger defined).
+
 ```
-$ curl -XPOST -d "10" http://localhost:8080/r/flows-example/primes
+$ fn inspect fn flows-examples primes
+```
+
+Take note of the `fnproject.io/fn/invokeEndpoint` URL and invoke it (ex. using curl).
+
+$ curl -X POST -d "10" http://localhost:8080/invoke/...
 The 10th prime number is 29
 ```
 

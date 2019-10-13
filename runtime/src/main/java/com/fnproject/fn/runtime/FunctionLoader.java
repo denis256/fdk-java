@@ -20,6 +20,8 @@ public class FunctionLoader {
      */
     public MethodWrapper loadClass(String className, String fnName) {
         Class<?> targetClass = loadClass(className);
+
+
         return new DefaultMethodWrapper(targetClass, getTargetMethod(targetClass, fnName));
     }
 
@@ -66,7 +68,7 @@ public class FunctionLoader {
      * Override the classloader used for fn class resolution
      * Primarily for testing, otherwise the system/default  classloader is used.
      *
-     * @param loader
+     * @param loader the context class loader to use for this function
      */
     public static void setContextClassLoader(ClassLoader loader) {
         contextClassLoader = loader;

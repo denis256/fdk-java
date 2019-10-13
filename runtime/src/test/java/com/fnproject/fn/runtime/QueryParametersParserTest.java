@@ -1,9 +1,13 @@
 package com.fnproject.fn.runtime;
 
 import com.fnproject.fn.api.QueryParameters;
+import com.fnproject.fn.runtime.httpgateway.QueryParametersParser;
 import org.junit.Test;
 
-import java.util.*;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -17,7 +21,7 @@ public class QueryParametersParserTest {
     }
 
     @Test
-    public void gettingNonExistantParameterProducesOptionalEmpty() {
+    public void gettingNonExistentParameterProducesOptionalEmpty() {
         QueryParameters params = QueryParametersParser.getParams("www.example.com");
 
         assertThat(params.getValues("var")).isEmpty();

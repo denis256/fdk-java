@@ -1,6 +1,7 @@
 package com.fnproject.fn.runtime.testfns;
 
 import com.fnproject.fn.api.InputEvent;
+import com.fnproject.fn.api.InvocationContext;
 import org.apache.commons.io.IOUtils;
 
 import java.io.IOException;
@@ -105,6 +106,21 @@ public class TestFn {
 
     }
 
+
+    public static void readRawEvent(InputEvent evt) {
+        input = evt;
+
+    }
+
+
+    public static void setsOutputHeaders(InvocationContext ic) {
+        ic.addResponseHeader("Header-1","v1");
+        ic.setResponseContentType("foo-ct");
+        ic.addResponseHeader("a","b1");
+        ic.addResponseHeader("a","b2");
+
+
+    }
     public static List<Animal> fnGenericAnimal() {
         Animal dog = new Animal("Spot", 6);
         Animal cat = new Animal("Jason", 16);
@@ -115,7 +131,7 @@ public class TestFn {
      * Reset the internal (static) state
      * Should be called between runs;
      */
-    public static final void reset() {
+    public static  void reset() {
         input = NOTHING;
         output = NOTHING;
         count = 0;

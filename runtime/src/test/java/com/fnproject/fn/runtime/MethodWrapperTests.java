@@ -1,6 +1,7 @@
 package com.fnproject.fn.runtime;
 
 import com.fnproject.fn.api.MethodWrapper;
+import org.assertj.core.api.AbstractIntegerAssert;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
@@ -8,7 +9,6 @@ import org.junit.runners.Parameterized;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
-import java.util.function.Function;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -35,8 +35,9 @@ public class MethodWrapperTests {
         if (parameterIndex >= 0) {
             assertThat(method.getParamType(parameterIndex).getParameterClass()).isEqualTo(expectedType);
         } else {
-            assertThat(parameterIndex).isEqualTo(-1)
-                    .withFailMessage("You can only use non negative parameter indices or -1 to represent return value in this test suite");
+            AbstractIntegerAssert<?> withFailMessage = assertThat(parameterIndex)
+                .isEqualTo(-1)
+                .withFailMessage("You can only use non negative parameter indices or -1 to represent return value in this test suite");
             assertThat(method.getReturnType().getParameterClass()).isEqualTo(expectedType);
         }
     }
@@ -68,20 +69,20 @@ public class MethodWrapperTests {
     }
 
     static class ConcreteTypeExamples {
-        public void voidReturnType() { };
-        public void singleParameter(String s) { };
-        public void singlePrimitiveParameter(boolean i) { };
-        public void singlePrimitiveParameter(byte i) { };
-        public void singlePrimitiveParameter(char i) { };
-        public void singlePrimitiveParameter(short i) { };
-        public void singlePrimitiveParameter(int i) { };
-        public void singlePrimitiveParameter(long i) { };
-        public void singlePrimitiveParameter(float i) { };
-        public void singlePrimitiveParameter(double i) { };
-        public void multipleParameters(String s, double i) { };
-        public String noArgs() { return ""; };
-        public int noArgsWithPrimitiveReturnType() { return 1; };
-        public void singleGenericParameter(List<String> s) { };
+        public void voidReturnType() { }
+        public void singleParameter(String s) { }
+        public void singlePrimitiveParameter(boolean i) { }
+        public void singlePrimitiveParameter(byte i) { }
+        public void singlePrimitiveParameter(char i) { }
+        public void singlePrimitiveParameter(short i) { }
+        public void singlePrimitiveParameter(int i) { }
+        public void singlePrimitiveParameter(long i) { }
+        public void singlePrimitiveParameter(float i) { }
+        public void singlePrimitiveParameter(double i) { }
+        public void multipleParameters(String s, double i) { }
+        public String noArgs() { return ""; }
+        public int noArgsWithPrimitiveReturnType() { return 1; }
+        public void singleGenericParameter(List<String> s) { }
     }
 
     static class ParentClassWithGenericType<T> {

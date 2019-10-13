@@ -1,50 +1,30 @@
 package com.fnproject.fn.runtime;
 
-import com.fnproject.fn.api.FunctionInvoker;
-import com.fnproject.fn.api.InputBinding;
-import com.fnproject.fn.api.InputCoercion;
-import com.fnproject.fn.api.InputEvent;
-import com.fnproject.fn.api.InvocationContext;
-import com.fnproject.fn.api.MethodWrapper;
-import com.fnproject.fn.api.OutputBinding;
-import com.fnproject.fn.api.OutputCoercion;
-import com.fnproject.fn.api.OutputEvent;
-import com.fnproject.fn.api.RuntimeContext;
-import com.fnproject.fn.runtime.coercion.ByteArrayCoercion;
-import com.fnproject.fn.runtime.coercion.InputEventCoercion;
-import com.fnproject.fn.runtime.coercion.OutputEventCoercion;
-import com.fnproject.fn.runtime.coercion.StringCoercion;
-import com.fnproject.fn.runtime.coercion.VoidCoercion;
-import com.fnproject.fn.runtime.coercion.jackson.JacksonCoercion;
-import com.fnproject.fn.runtime.exception.FunctionClassInstantiationException;
+import com.fnproject.fn.api.*;
 import com.fnproject.fn.api.exception.FunctionConfigurationException;
 import com.fnproject.fn.api.exception.FunctionInputHandlingException;
-import com.fnproject.fn.runtime.flow.FlowContinuationInvoker;
+import com.fnproject.fn.runtime.coercion.*;
+import com.fnproject.fn.runtime.coercion.jackson.JacksonCoercion;
+import com.fnproject.fn.runtime.exception.FunctionClassInstantiationException;
 
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Optional;
+import java.util.*;
 
 public class FunctionRuntimeContext implements RuntimeContext {
 
     private final Map<String, String> config;
     private final MethodWrapper method;
-    private Map<String, Object> attributes = new HashMap<>();
-    private List<FunctionInvoker> configuredInvokers = new ArrayList<>();
+    private final Map<String, Object>  attributes = new HashMap<>();
+    private final List<FunctionInvoker> preCallHandlers = new ArrayList<>();
+    private final List<FunctionInvoker> configuredInvokers = new ArrayList<>();
 
     private Object instance;
 
-    private final List<InputCoercion> builtinInputCoercions = Arrays.asList(new StringCoercion(), new ByteArrayCoercion(), new InputEventCoercion(), JacksonCoercion.instance());
+    private final List<InputCoercion> builtinInputCoercions = Arrays.asList(new ContextCoercion(), new StringCoercion(), new ByteArrayCoercion(), new InputEventCoercion(), JacksonCoercion.instance());
     private final List<InputCoercion> userInputCoercions = new LinkedList<>();
     private final List<OutputCoercion> builtinOutputCoercions = Arrays.asList(new StringCoercion(), new ByteArrayCoercion(), new VoidCoercion(), new OutputEventCoercion(), JacksonCoercion.instance());
     private final List<OutputCoercion> userOutputCoercions = new LinkedList<>();
@@ -52,7 +32,17 @@ public class FunctionRuntimeContext implements RuntimeContext {
     public FunctionRuntimeContext(MethodWrapper method, Map<String, String> config) {
         this.method = method;
         this.config = Objects.requireNonNull(config);
-        configuredInvokers.addAll(Arrays.asList(new FlowContinuationInvoker(), new MethodFunctionInvoker()));
+        configuredInvokers.add(new MethodFunctionInvoker());
+    }
+
+    @Override
+    public String getAppID() {
+        return config.getOrDefault("FN_APP_ID", "");
+    }
+
+    @Override
+    public String getFunctionID() {
+        return config.getOrDefault("FN_FN_ID", "");
     }
 
     @Override
@@ -69,7 +59,7 @@ public class FunctionRuntimeContext implements RuntimeContext {
                             if (RuntimeContext.class.isAssignableFrom(ctor.getParameterTypes()[0])) {
                                 instance = ctor.newInstance(FunctionRuntimeContext.this);
                             } else {
-                                if ( getMethod().getTargetClass().getEnclosingClass() != null && ! Modifier.isStatic(getMethod().getTargetClass().getModifiers()) ) {
+                                if (getMethod().getTargetClass().getEnclosingClass() != null && !Modifier.isStatic(getMethod().getTargetClass().getModifiers())) {
                                     throw new FunctionClassInstantiationException("The function " + getMethod().getTargetClass() + " cannot be instantiated as it is a non-static inner class");
                                 } else {
                                     throw new FunctionClassInstantiationException("The function " + getMethod().getTargetClass() + " cannot be instantiated as its constructor takes an unrecognized argument of type " + constructors[0].getParameterTypes()[0] + ". Function classes should have a single public constructor that takes either no arguments or a RuntimeContext argument");
@@ -131,11 +121,11 @@ public class FunctionRuntimeContext implements RuntimeContext {
     public List<InputCoercion> getInputCoercions(MethodWrapper targetMethod, int param) {
         Annotation parameterAnnotations[] = targetMethod.getTargetMethod().getParameterAnnotations()[param];
         Optional<Annotation> coercionAnnotation = Arrays.stream(parameterAnnotations)
-                .filter((ann) -> ann.annotationType().equals(InputBinding.class))
-                .findFirst();
+          .filter((ann) -> ann.annotationType().equals(InputBinding.class))
+          .findFirst();
         if (coercionAnnotation.isPresent()) {
             try {
-                List<InputCoercion> coercionList = new ArrayList<InputCoercion>();
+                List<InputCoercion> coercionList = new ArrayList<>();
                 InputBinding inputBindingAnnotation = (InputBinding) coercionAnnotation.get();
                 coercionList.add(inputBindingAnnotation.coercion().getDeclaredConstructor().newInstance());
                 return coercionList;
@@ -154,9 +144,19 @@ public class FunctionRuntimeContext implements RuntimeContext {
         userOutputCoercions.add(Objects.requireNonNull(oc));
     }
 
+
     @Override
-    public void setInvoker(FunctionInvoker invoker) {
-        configuredInvokers.add(1, invoker);
+    public void addInvoker(FunctionInvoker invoker, FunctionInvoker.Phase phase) {
+        switch (phase) {
+            case PreCall:
+                preCallHandlers.add(0, invoker);
+                break;
+            case Call:
+                configuredInvokers.add(0, invoker);
+                break;
+            default:
+                throw new IllegalArgumentException("Unsupported phase " + phase);
+        }
     }
 
     @Override
@@ -164,20 +164,25 @@ public class FunctionRuntimeContext implements RuntimeContext {
         return method;
     }
 
-    public FunctionInvocationContext newInvocationContext() {
-        return new FunctionInvocationContext(this);
+    public FunctionInvocationContext newInvocationContext(InputEvent inputEvent) {
+        return new FunctionInvocationContext(this, inputEvent);
     }
 
     public OutputEvent tryInvoke(InputEvent evt, InvocationContext entryPoint) {
-        OutputEvent output = null;
+        for (FunctionInvoker invoker : preCallHandlers) {
+            Optional<OutputEvent> result = invoker.tryInvoke(entryPoint, evt);
+            if (result.isPresent()) {
+                return result.get();
+            }
+        }
+
         for (FunctionInvoker invoker : configuredInvokers) {
             Optional<OutputEvent> result = invoker.tryInvoke(entryPoint, evt);
             if (result.isPresent()) {
-                output = result.get();
-                break;
+                return result.get();
             }
         }
-        return output;
+        return null;
     }
 
     @Override
@@ -185,7 +190,7 @@ public class FunctionRuntimeContext implements RuntimeContext {
         OutputBinding coercionAnnotation = method.getAnnotation(OutputBinding.class);
         if (coercionAnnotation != null) {
             try {
-                List<OutputCoercion> coercionList = new ArrayList<OutputCoercion>();
+                List<OutputCoercion> coercionList = new ArrayList<>();
                 coercionList.add(coercionAnnotation.coercion().getDeclaredConstructor().newInstance());
                 return coercionList;
 
@@ -193,7 +198,7 @@ public class FunctionRuntimeContext implements RuntimeContext {
                 throw new FunctionConfigurationException("Unable to instantiate output coercion class for method " + getMethod());
             }
         }
-        List<OutputCoercion> outputList = new ArrayList<OutputCoercion>();
+        List<OutputCoercion> outputList = new ArrayList<>();
         outputList.addAll(userOutputCoercions);
         outputList.addAll(builtinOutputCoercions);
         return outputList;

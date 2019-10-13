@@ -7,7 +7,9 @@ import com.fnproject.fn.api.exception.FunctionConfigurationException;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
-import java.util.*;
+import java.util.Arrays;
+import java.util.Comparator;
+import java.util.Optional;
 
 /**
  * Loads function entry points based on their class name and method name creating a {@link FunctionRuntimeContext}
@@ -19,7 +21,6 @@ public class FunctionConfigurer {
      * create a function runtime context for a given class and method name
      *
      * @param runtimeContext    The runtime context encapsulating the function to be run
-     * @return a new runtime context
      */
     public void configure(FunctionRuntimeContext runtimeContext) {
         validateConfigurationMethods(runtimeContext.getMethodWrapper());

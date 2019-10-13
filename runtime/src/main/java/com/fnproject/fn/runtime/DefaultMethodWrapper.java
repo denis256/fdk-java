@@ -1,7 +1,7 @@
 package com.fnproject.fn.runtime;
 
-import com.fnproject.fn.api.TypeWrapper;
 import com.fnproject.fn.api.MethodWrapper;
+import com.fnproject.fn.api.TypeWrapper;
 
 import java.lang.reflect.Method;
 import java.util.Arrays;
@@ -19,12 +19,11 @@ public class DefaultMethodWrapper implements MethodWrapper {
         this.srcMethod = srcMethod;
     }
 
-    public DefaultMethodWrapper(Class<?> srcClass, String srcMethod) {
-        this.srcClass = srcClass;
-        this.srcMethod = Arrays.stream(srcClass.getMethods())
-                .filter((m) -> m.getName().equals(srcMethod))
-                .findFirst()
-                .orElseThrow(() -> new RuntimeException(new NoSuchMethodException(srcClass.getCanonicalName() + "::" + srcMethod)));
+    DefaultMethodWrapper(Class<?> srcClass, String srcMethod) {
+        this(srcClass, Arrays.stream(srcClass.getMethods())
+          .filter((m) -> m.getName().equals(srcMethod))
+          .findFirst()
+          .orElseThrow(() -> new RuntimeException(new NoSuchMethodException(srcClass.getCanonicalName() + "::" + srcMethod))));
     }
 
 
@@ -40,12 +39,12 @@ public class DefaultMethodWrapper implements MethodWrapper {
 
     @Override
     public TypeWrapper getParamType(int index) {
-        return new ParameterWrapper(this, index);
+        return MethodTypeWrapper.fromParameter(this, index);
     }
 
     @Override
     public TypeWrapper getReturnType() {
-        return new ReturnTypeWrapper(this);
+        return MethodTypeWrapper.fromReturnType(this);
     }
 
     @Override

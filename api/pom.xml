@@ -9,18 +9,25 @@
     </parent>
     <modelVersion>4.0.0</modelVersion>
 
-    <properties>
-        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-    </properties>
-
     <artifactId>api</artifactId>
 
+    <dependencies>
+        <dependency>
+            <groupId>junit</groupId>
+            <artifactId>junit</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.assertj</groupId>
+            <artifactId>assertj-core</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
     <build>
         <plugins>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-javadoc-plugin</artifactId>
-                <version>3.0.0-M1</version>
                 <executions>
                     <execution>
                         <id>attach-javadocs</id>
@@ -33,7 +40,6 @@
             <plugin>
                 <groupId>org.netbeans.tools</groupId>
                 <artifactId>sigtest-maven-plugin</artifactId>
-                <version>1.0</version>
                 <executions>
                     <execution>
                         <goals>
@@ -44,17 +50,9 @@
                 <configuration>
                     <sigfile>src/main/api/snapshot.sigfile</sigfile>
                     <action>strictcheck</action>
-                    <packages>com.fnproject.fn.api,com.fnproject.fn.api.exception,com.fnproject.fn.api.flow</packages>
+                    <packages>com.fnproject.fn.api,com.fnproject.fn.api.exception</packages>
                 </configuration>
             </plugin>
         </plugins>
     </build>
-    <dependencies>
-        <dependency>
-            <groupId>junit</groupId>
-            <artifactId>junit</artifactId>
-            <version>4.12</version>
-            <scope>test</scope>
-        </dependency>
-    </dependencies>
 </project>
